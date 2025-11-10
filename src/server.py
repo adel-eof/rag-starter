@@ -5,6 +5,7 @@ import uuid
 import sqlite3
 from typing import List, Optional, AsyncGenerator, Dict, Any, Tuple
 import asyncio
+import uvicorn
 
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -394,4 +395,16 @@ async def reload_index_endpoint():
     return JSONResponse(
         status_code=200,
         content={"message": "Index reloaded successfully."}
+    )
+
+if __name__ == "__main__":
+    """
+    Allows running the server directly with `python -m src.server`
+    """
+    logger.info("Starting Uvicorn server...")
+    uvicorn.run(
+        "src.server:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False # Set to True for development, but False is safer for this app
     )
