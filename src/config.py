@@ -36,12 +36,17 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------------
     DATA_DIR: Path = Path.cwd() / "data"
     VECTOR_INDEX_PATH: Path = DATA_DIR / "vector_index.faiss"
-    DOCSTORE_PATH: Path = DATA_DIR / "docs_chunks.json"
+    DB_PATH: Path = DATA_DIR / "docstore.db"
+    ID_MAP_PATH: Path = DATA_DIR / "id_map.json"
 
     # ---------------------------------------------------------------------
     # Indexing and chunking
     # ---------------------------------------------------------------------
     INDEX_EXTENSIONS: Set[str] = {".m", ".h", ".rb", ".xml", ".py", ".ini"}
+    INDEX_EXCLUDE_DIRS: Set[str] = {
+        ".git", "node_modules", "venv", "__pycache__",
+        "build", "dist", ".vscode", ".idea"
+    }
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 64
 

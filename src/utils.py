@@ -3,12 +3,19 @@ from pathlib import Path
 from typing import List, Set
 import re
 
+# This is a new dependency for the improved chunker
+# from langchain_community.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from .config import settings
+
 logger = logging.getLogger("oca.utils")
 
 
 def find_source_files(root: Path, exts: Set[str]) -> List[Path]:
     """
-    Recursively locate files with the given extensions.
+    Recursively locate files with the given extensions,
+    ignoring specified directories.
 
     Args:
         root: The root directory to search.
@@ -23,10 +30,14 @@ def find_source_files(root: Path, exts: Set[str]) -> List[Path]:
 
     files = []
     for p in root.rglob("*"):
+        # Check if the path is within an excluded directory
+        if any(part in settings.INDEX_EXCLUDE_DIRS for part in p.parts):
+            continue
+
         if p.suffix.lower() in exts and p.is_file():
             files.append(p)
 
-    logger.info("Found %d source files under %s", len(files), root)
+    logger.info("Found %d source files under %s (after filtering)", len(files), root)
     return files
 
 
@@ -44,31 +55,27 @@ def read_file_text(path: Path) -> str:
 
 def chunk_text(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
     """
-    Naive chunker: splits on whitespace windows to generate chunks with overlap.
+    Splits text using a recursive character splitter.
+    Note: chunk_size and overlap are now character-based.
 
     Returns:
         A list of text chunks.
     """
-    words = text.split()
-    if not words:
+    if not text:
         return []
 
-    if chunk_size <= overlap:
-        logger.warning("Chunk size (%d) is <= overlap (%d). Setting overlap to 0.", chunk_size, overlap)
-        overlap = 0
+    # Initialize the splitter
+    # This is much more effective than the naive word splitter
+    text_splitter = RecursiveCharacterTextSplitter(
+        # TODO: Add code-specific separators if desired
+        # separators=["\n\n", "\n", " ", ""],
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        length_function=len,
+        is_separator_regex=False,
+    )
 
-    chunks = []
-    i = 0
-    while i < len(words):
-        chunk_words = words[i:i + chunk_size]
-        chunks.append(" ".join(chunk_words))
-
-        if i + chunk_size >= len(words):
-            break
-
-        i += chunk_size - overlap
-
-    return chunks
+    return text_splitter.split_text(text)
 
 
 def normalize_whitespace(s: str) -> str:

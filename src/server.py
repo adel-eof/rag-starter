@@ -2,6 +2,7 @@ import time
 import logging
 import json
 import uuid
+import sqlite3
 from typing import List, Optional, AsyncGenerator, Dict, Any
 import asyncio
 
@@ -35,7 +36,7 @@ class AppState:
     def __init__(self):
         self.embedding: Optional[EmbeddingService] = None
         self.index: Optional[Any] = None  # faiss.Index
-        self.docs: Optional[List[Dict[str, Any]]] = None
+        self.id_map: Optional[List[str]] = None # Maps Faiss index to chunk ID
         self.llama: Optional[Llama] = None
 
 app.state = AppState()
@@ -52,12 +53,6 @@ def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict
         "You are a helpful offline code assistant. "
         "Use the file snippets below to answer the user's question. "
         "Answer concisely, referencing file paths and function names."
-    )
-
-    user_prompt = (
-        f"Context:\n{context_text}\n\n"
-        f"User question: {query}\n\n"
-        "Answer:"
     )
 
     user_prompt = (
@@ -94,21 +89,19 @@ async def startup_event():
 
     if app.state.embedding:
         try:
-            index, docs = app.state.embedding.load_index(
-                index_path=settings.VECTOR_INDEX_PATH,
-                docstore_path=settings.DOCSTORE_PATH
-            )
+            # Load_index now returns the index and the ID map
+            index, id_map = app.state.embedding.load_index()
             app.state.index = index
-            app.state.docs = docs
-            logger.info("Vector index and docs loaded successfully.")
+            app.state.id_map = id_map
+            logger.info("Vector index and ID map loaded successfully.")
         except FileNotFoundError:
             logger.warning("Vector index not found at startup. Please run indexing before using the API.")
             app.state.index = None
-            app.state.docs = None
+            app.state.id_map = None
         except Exception as e:
             logger.exception("Failed to load vector index: %s", e)
             app.state.index = None
-            app.state.docs = None
+            app.state.id_map = None
 
     if not settings.LLAMA_MODEL_PATH or not settings.LLAMA_MODEL_PATH.exists():
         logger.error("FATAL: Llama model path not found: %s", settings.LLAMA_MODEL_PATH)
@@ -135,19 +128,58 @@ def check_models_or_raise():
         raise HTTPException(status_code=500, detail="Embedding model not loaded on server.")
     if app.state.llama is None:
         raise HTTPException(status_code=500, detail="Llama model not loaded on server.")
-    if app.state.index is None or app.state.docs is None:
+    # Check for index AND id_map now
+    if app.state.index is None or app.state.id_map is None:
         raise HTTPException(status_code=503, detail="Vector index not available. Run indexing first.")
 
 
 def retrieve_contexts(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Retrieve top-k code chunks for a given query."""
-    if app.state.index is None or app.state.docs is None or app.state.embedding is None:
+    """
+    Retrieve top-k code chunks for a given query.
+    1. Search Faiss for top-k chunk IDs.
+    2. Fetch chunk text from SQLite using IDs.
+    """
+    if app.state.index is None or app.state.id_map is None or app.state.embedding is None:
         logger.error("Retrieval attempted but index or embedding model is not loaded.")
         raise HTTPException(status_code=503, detail="Vector index not available. Run indexing first.")
 
+    # 1. Embed query and search Faiss for chunk IDs
     qvec = app.state.embedding.embed([normalize_whitespace(query)])[0]
-    results = app.state.embedding.search(app.state.index, app.state.docs, qvec.reshape(1, -1), top_k=top_k)
-    contexts = [r["doc"] for r in results]
+    # Search now returns [{"score": float, "id": str}]
+    results = app.state.embedding.search(app.state.index, app.state.id_map, qvec.reshape(1, -1), top_k=top_k)
+
+    context_ids = [r["id"] for r in results]
+    if not context_ids:
+        return []
+
+    # 2. Fetch chunk text from SQLite
+    contexts = []
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{settings.DB_PATH}?mode=ro", uri=True) # Read-only connection
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        placeholders = ",".join("?" * len(context_ids))
+        query_sql = f"SELECT id, path, chunk FROM chunks WHERE id IN ({placeholders})"
+
+        cursor.execute(query_sql, context_ids)
+
+        # Map IDs to rows to preserve relevance order
+        db_results = {row["id"]: {"path": row["path"], "chunk": row["chunk"]} for row in cursor.fetchall()}
+
+        # Re-build contexts list in the correct order
+        for r_id in context_ids:
+            if r_id in db_results:
+                contexts.append(db_results[r_id])
+
+    except Exception as e:
+        logger.exception("Failed to retrieve contexts from SQLite: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to retrieve context from database.")
+    finally:
+        if conn:
+            conn.close()
+
     return contexts
 
 # ---------------------------------------------------------------------

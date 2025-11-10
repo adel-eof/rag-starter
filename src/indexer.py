@@ -26,7 +26,7 @@ def index_codebase(codebase_path: Path, embedding_model_path: str = None) -> boo
     """
     logger.info("Starting indexing of codebase: %s", codebase_path)
 
-    # 1. Find all source files
+    # 1. Find all source files (now filtered)
     files = find_source_files(codebase_path, settings.INDEX_EXTENSIONS)
     if not files:
         logger.warning("No source files found with extensions %s in %s", settings.INDEX_EXTENSIONS, codebase_path)
@@ -35,7 +35,7 @@ def index_codebase(codebase_path: Path, embedding_model_path: str = None) -> boo
     docs: List[Dict[str, Any]] = []
     counter = 0
 
-    # 2. Read, normalize, and chunk files
+    # 2. Read, normalize, and chunk files (now with better chunker)
     for f in files:
         text = read_file_text(f)
         if not text:
@@ -67,6 +67,8 @@ def index_codebase(codebase_path: Path, embedding_model_path: str = None) -> boo
 
     emb = EmbeddingService(model_path=model_path_to_use)
     emb.load()
+
+    # build_index now handles all storage (Faiss, SQLite, ID map)
     emb.build_index(docs)
 
     logger.info("Indexing complete. Indexed %d chunks.", counter)
