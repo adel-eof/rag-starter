@@ -1,12 +1,16 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Dict, Any
 
 
 class QueryRequest(BaseModel):
     """API model for a query request."""
     query: str
-    conversation_id: Optional[str] = None
+    # conversation_id: Optional[str] = None
     top_k: Optional[int] = 5
+
+    # New field to accept conversation history
+    # Expected format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
+    history: Optional[List[Dict[str, str]]] = None
 
 
 class ChoiceMessage(BaseModel):

@@ -6,7 +6,7 @@ import sqlite3
 from typing import List, Optional, AsyncGenerator, Dict, Any, Tuple
 import asyncio
 import uvicorn
-from contextlib import asynccontextmanager # <-- NEW IMPORT
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -116,9 +116,14 @@ class AppState:
 # Note: app.state is now initialized inside the lifespan manager
 # We only define the class here.
 
-def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def build_chat_messages(
+    query: str,
+    contexts: List[Dict[str, Any]],
+    history: Optional[List[Dict[str, str]]] = None
+) -> List[Dict[str, str]]:
     """
-    Builds the 'messages' list for the Llama chat completion API.
+    Builds the 'messages' list for the Llama chat completion API,
+    injecting conversation history.
     """
     context_text = "\n\n----\n".join(
         [f"File: {c['path']}\nSnippet:\n{c['chunk']}" for c in contexts]
@@ -128,6 +133,8 @@ def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict
         "You are a helpful offline code assistant. "
         "Use the file snippets below to answer the user's question. "
         "Answer concisely, referencing file paths and function names."
+        "If the user asks a follow-up question, use the context from "
+        "the previous conversation turns."
     )
 
     user_prompt = (
@@ -143,10 +150,16 @@ def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict
         logger.warning("User prompt too long (%d chars). Truncating to %d chars.", len(user_prompt), settings.LLAMA_MAX_PROMPT_CHARS)
         user_prompt = user_prompt[:settings.LLAMA_MAX_PROMPT_CHARS] + "\n\n[Truncated for context length]\n"
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt}
-    ]
+    # Start with the system prompt
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add the past conversation history (if any)
+    if history:
+        messages.extend(history)
+
+    # Add the final user query with context
+    messages.append({"role": "user", "content": user_prompt})
+
     return messages
 
 
@@ -169,10 +182,6 @@ def _load_index_data() -> Tuple[Optional[faiss.Index], Optional[List[str]]]:
     except Exception as e:
         logger.exception("Failed to load vector index: %s", e)
         return None, None
-
-
-# --- REMOVED THE OLD @app.on_event("startup") FUNCTION ---
-
 
 async def check_models_or_raise():
     """Check if all required models are loaded, or raise HTTPException."""
@@ -307,7 +316,8 @@ async def query_endpoint(req: QueryRequest):
     final_top_k = req.top_k or settings.RERANK_TOP_K
     contexts = await retrieve_contexts(req.query, final_top_k=final_top_k)
 
-    messages = build_chat_messages(req.query, contexts)
+    # Pass the history from the request
+    messages = build_chat_messages(req.query, contexts, history=req.history)
 
     try:
         start_time = time.time()
@@ -372,7 +382,8 @@ async def stream_query(req: QueryRequest):
     final_top_k = req.top_k or settings.RERANK_TOP_K
     contexts = await retrieve_contexts(req.query, final_top_k=final_top_k)
 
-    messages = build_chat_messages(req.query, contexts)
+    # Pass the history from the request
+    messages = build_chat_messages(req.query, contexts, history=req.history)
 
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
