@@ -23,8 +23,10 @@ class Settings(BaseSettings):
         description="Path to the codebase root to be indexed."
     )
     EMBEDDING_MODEL_PATH: Path = Field(
-        default_factory=lambda: get_home() / "projects/llm-models/all-MiniLM-L6-v2",
-        description="Path to the SentenceTransformer embedding model directory."
+        # Updated to a more powerful model.
+        # This can be a path or a HuggingFace model name.
+        default="sentence-transformers/all-mpnet-base-v2",
+        description="Path or name of the SentenceTransformer embedding model."
     )
     LLAMA_MODEL_PATH: Path = Field(
         default_factory=lambda: get_home() / "projects/llm-models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
@@ -39,6 +41,12 @@ class Settings(BaseSettings):
     DB_PATH: Path = DATA_DIR / "docstore.db"
     ID_MAP_PATH: Path = DATA_DIR / "id_map.json"
 
+    # Temporary paths for atomic writes during indexing
+    VECTOR_INDEX_PATH_TMP: Path = DATA_DIR / "vector_index.faiss.tmp"
+    DB_PATH_TMP: Path = DATA_DIR / "docstore.db.tmp"
+    ID_MAP_PATH_TMP: Path = DATA_DIR / "id_map.json.tmp"
+
+
     # ---------------------------------------------------------------------
     # Indexing and chunking
     # ---------------------------------------------------------------------
@@ -49,6 +57,10 @@ class Settings(BaseSettings):
     }
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 64
+
+    # HNSW (Faiss) parameters
+    HNSW_M: int = 64  # Number of neighbors for HNSW
+    HNSW_EF_CONSTRUCTION: int = 128 # efConstruction parameter for HNSW
 
     # ---------------------------------------------------------------------
     # Llama-cpp options
