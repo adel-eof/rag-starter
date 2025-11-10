@@ -37,6 +37,12 @@ class Settings(BaseSettings):
         description="Path to the Llama GGUF model file."
     )
 
+    # New Reranker Model
+    RERANKER_MODEL_PATH: str = Field(
+        default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        description="Path or name of the Cross-Encoder reranking model."
+    )
+
     # ---------------------------------------------------------------------
     # Storage paths
     # ---------------------------------------------------------------------
@@ -64,6 +70,18 @@ class Settings(BaseSettings):
     # HNSW (Faiss) parameters
     HNSW_M: int = 64  # Number of neighbors for HNSW
     HNSW_EF_CONSTRUCTION: int = 128 # efConstruction parameter for HNSW
+
+    # ---------------------------------------------------------------------
+    # Retrieval and Reranking
+    # ---------------------------------------------------------------------
+    RETRIEVAL_TOP_K: int = Field(
+        default=20,
+        description="Number of candidate contexts to fetch before reranking."
+    )
+    RERANK_TOP_K: int = Field(
+        default=5,
+        description="Number of contexts to send to the LLM after reranking."
+    )
 
     # ---------------------------------------------------------------------
     # Llama-cpp options
