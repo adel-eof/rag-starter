@@ -10,8 +10,6 @@ from .embedding_service import EmbeddingService
 from .utils import normalize_whitespace
 from .config import settings
 
-# This check is necessary for llama_cpp.Llama
-# It must be imported *after* numpy.
 try:
     from llama_cpp import Llama
 except ImportError:

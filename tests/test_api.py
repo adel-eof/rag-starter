@@ -81,7 +81,6 @@ def patch_models(monkeypatch):
     - Replace EmbeddingService with DummyEmbedding
     - Replace Llama with a stubbed version
     """
-    # Patch the *class* in the module where it is *used*
     monkeypatch.setattr(server_mod, "EmbeddingService", lambda *_, **__: DummyEmbedding())
     monkeypatch.setattr(server_mod, "Llama", DummyLlama)
 
@@ -93,10 +92,6 @@ def patch_models(monkeypatch):
 def test_startup_event():
     """Test that the startup event runs and logs warnings if index is missing."""
     with TestClient(app) as client:
-        # The patch_models fixture ensures EmbeddingService() works,
-        # but load_index() in DummyEmbedding will succeed.
-        # To test the failure case, we'd need a more complex mock.
-        # For now, just test that startup completes.
         assert app.state.embedding is not None
         assert app.state.llama is not None
         assert app.state.index is not None
@@ -106,14 +101,12 @@ def test_query_json():
     """Ensure the /v1/query endpoint returns a structured, valid JSON response."""
     payload = {"query": "Where is the API token configured?", "top_k": 1}
 
-    # IMPORTANT: use TestClient as context manager to trigger startup/shutdown events
     with TestClient(app) as client:
         response = client.post("/v1/query", json=payload)
 
     assert response.status_code == 200
     data = response.json()
 
-    # Validate expected structure
     assert data["object"] == "chat.completion"
     assert "choices" in data
     assert isinstance(data["choices"], list)
@@ -126,8 +119,8 @@ def test_query_json():
 def test_query_missing_query_param():
     """Test 400 error if 'query' is missing."""
     with TestClient(app) as client:
-        response = client.post("/v1/query", json={"top_k": 1}) # Missing 'query'
-    assert response.status_code == 422 # Pydantic validation error
+        response = client.post("/v1/query", json={"top_k": 1})
+    assert response.status_code == 422
 
 def test_streaming_endpoint():
     """Test the POST /v1/query/stream endpoint."""
@@ -139,9 +132,8 @@ def test_streaming_endpoint():
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
-    # Check the content of the stream
     lines = response.text.split("\n\n")
-    assert lines[0].startswith("data: {") # Metadata chunk
-    assert lines[1].startswith("data: {") # Delta chunk
-    assert "bluetooth" in lines[1] # Check for correct mock response
-    assert lines[-2] == "data: [DONE]" # Final signal
+    assert lines[0].startswith("data: {")
+    assert lines[1].startswith("data: {")
+    assert "bluetooth" in lines[1]
+    assert lines[-2] == "data: [DONE]"

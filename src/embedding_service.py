@@ -111,7 +111,6 @@ class EmbeddingService:
         if query_embedding.ndim == 1:
             query_embedding = query_embedding.reshape(1, -1)
 
-        # D = distances (L2), I = indices
         D, I = index.search(query_embedding.astype("float32"), top_k)
 
         results = []

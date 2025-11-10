@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Set, Dict, Any
 
-# Helper to get the home directory safely
 def get_home() -> Path:
     """Returns the user's home directory."""
     return Path.home()
@@ -28,7 +27,6 @@ class Settings(BaseSettings):
         description="Path to the SentenceTransformer embedding model directory."
     )
     LLAMA_MODEL_PATH: Path = Field(
-        # default_factory=lambda: get_home() / "projects/llm-models/backyardai_llama-3-8b-Instruct-GGUF_llama-3-8b-Instruct.Q4_K_M.gguf",
         default_factory=lambda: get_home() / "projects/llm-models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
         description="Path to the Llama GGUF model file."
     )
@@ -38,7 +36,7 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------------
     DATA_DIR: Path = Path.cwd() / "data"
     VECTOR_INDEX_PATH: Path = DATA_DIR / "vector_index.faiss"
-    DOCSTORE_PATH: Path = DATA_DIR / "docs_chunks.json" # Changed from .pkl for safety
+    DOCSTORE_PATH: Path = DATA_DIR / "docs_chunks.json"
 
     # ---------------------------------------------------------------------
     # Indexing and chunking

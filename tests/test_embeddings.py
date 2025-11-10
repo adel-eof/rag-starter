@@ -14,17 +14,14 @@ class DummySentenceTransformer:
         pass
 
     def encode(self, texts, show_progress_bar=False, convert_to_numpy=True):
-        # deterministic dummy vectors (len x dim)
         return np.array([[float(len(t)%10)]*8 for t in texts], dtype="float32")
 
 @pytest.fixture
 def patched_embedding_service(monkeypatch, tmp_path):
     """Fixture to create an EmbeddingService with a patched SentenceTransformer."""
-    # Patch SentenceTransformer in the module where it's imported
     import src.embedding_service as embmod
     monkeypatch.setattr(embmod, "SentenceTransformer", DummySentenceTransformer)
 
-    # Patch config to use temp paths
     monkeypatch.setattr(config.settings, "VECTOR_INDEX_PATH", tmp_path / "test.faiss")
     monkeypatch.setattr(config.settings, "DOCSTORE_PATH", tmp_path / "test.json")
 
@@ -49,9 +46,6 @@ def test_embedding_service_embed(patched_embedding_service):
 
     assert vecs.shape == (2, 8) # 2 texts, 8 dims
     assert vecs.dtype == "float32"
-    # Check deterministic output
-    # len("hello world") % 10 = 11 % 10 = 1
-    # len("another text") % 10 = 12 % 10 = 2
     assert np.array_equal(vecs[0], np.array([1.0]*8, dtype="float32"))
     assert np.array_equal(vecs[1], np.array([2.0]*8, dtype="float32"))
 
@@ -65,7 +59,6 @@ def test_build_and_load_index(patched_embedding_service, tmp_path):
 
     svc.build_index(docs)
 
-    # Check that files were created
     assert (tmp_path / "test.faiss").exists()
     assert (tmp_path / "test.json").exists()
 

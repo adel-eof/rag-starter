@@ -8,12 +8,12 @@ import asyncio
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sse_starlette.sse import EventSourceResponse  # Correct import for SSE
+from sse_starlette.sse import EventSourceResponse
 from llama_cpp import Llama
 
 from .models import QueryRequest
 from .embedding_service import EmbeddingService
-from .config import settings  # Import the settings instance
+from .config import settings
 from .utils import normalize_whitespace
 
 # Configure logging
@@ -26,13 +26,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["Content-Type", "Authorization"],
 )
-
-# ---------------------------------------------------------------------
-# Application State
-# ---------------------------------------------------------------------
 
 class AppState:
     """Holds the loaded models and index."""
@@ -44,10 +40,6 @@ class AppState:
 
 app.state = AppState()
 
-# ---------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------
-
 def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     """
     Builds the 'messages' list for the Llama chat completion API.
@@ -56,33 +48,17 @@ def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict
         [f"File: {c['path']}\nSnippet:\n{c['chunk']}" for c in contexts]
     )
 
-    # THE ORIGINAL
-    # system_prompt = (
-    #     "You are a helpful offline code assistant. "
-    #     "Use the file snippets below to answer the user's question. "
-    #     "Answer concisely, referencing file paths and function names."
-    # )
-
     system_prompt = (
-        "You are CodeMate, an offline code assistant that works strictly with the user's local codebase. "
-        "The user query is paired with code snippets retrieved from a FAISS index and their metadata. "
-        "Only use the content of these snippets to answer questions. "
-        "Do not speculate about files or functions not shown in the snippets. "
-        "If the user asks for a specific function, class, or code block, you MUST provide that code block *exactly* as it appears in the context."
-        "If a requested symbol or function (e.g., `find_source_files`) is not present in the retrieved snippets, "
-        "reply exactly: 'I could not find that code in the provided context.' "
-        "When code is present, reproduce it verbatim, citing the file path it came from. "
-        "Do not summarize or reformat code — show it exactly as it appears. "
-        "Be concise, accurate, and avoid any assumptions about unseen parts of the codebase."
-        "If the user asks a general question, provide a summary."
+        "You are a helpful offline code assistant. "
+        "Use the file snippets below to answer the user's question. "
+        "Answer concisely, referencing file paths and function names."
     )
 
-    # THE ORIGINAL
-    # user_prompt = (
-    #     f"Context:\n{context_text}\n\n"
-    #     f"User question: {query}\n\n"
-    #     "Answer:"
-    # )
+    user_prompt = (
+        f"Context:\n{context_text}\n\n"
+        f"User question: {query}\n\n"
+        "Answer:"
+    )
 
     user_prompt = (
         f"The following snippets come from the user's local codebase:\n\n"
@@ -93,7 +69,6 @@ def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict
         "'I could not find that code in the provided context.'"
     )
 
-    # Truncate prompt if it's too large for model’s context window
     if len(user_prompt) > settings.LLAMA_MAX_PROMPT_CHARS:
         logger.warning("User prompt too long (%d chars). Truncating to %d chars.", len(user_prompt), settings.LLAMA_MAX_PROMPT_CHARS)
         user_prompt = user_prompt[:settings.LLAMA_MAX_PROMPT_CHARS] + "\n\n[Truncated for context length]\n"
@@ -105,24 +80,18 @@ def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict
     return messages
 
 
-# ---------------------------------------------------------------------
-# Startup
-# ---------------------------------------------------------------------
-
 @app.on_event("startup")
 async def startup_event():
     """Load embeddings, vector index, and Llama model at startup."""
     logger.info("Starting Offline Code Assistant server...")
 
-    # 1. Load Embedding Service
     try:
         app.state.embedding = EmbeddingService(model_path=str(settings.EMBEDDING_MODEL_PATH))
         app.state.embedding.load()
     except Exception as e:
         logger.exception("FATAL: Failed to load embedding model at startup: %s", e)
-        app.state.embedding = None # Ensure it's None on failure
+        app.state.embedding = None
 
-    # 2. Load Vector Index
     if app.state.embedding:
         try:
             index, docs = app.state.embedding.load_index(
@@ -141,7 +110,6 @@ async def startup_event():
             app.state.index = None
             app.state.docs = None
 
-    # 3. Load Llama Model
     if not settings.LLAMA_MODEL_PATH or not settings.LLAMA_MODEL_PATH.exists():
         logger.error("FATAL: Llama model path not found: %s", settings.LLAMA_MODEL_PATH)
         logger.error("Please set LLAMA_MODEL_PATH environment variable or update src/config.py")
@@ -160,10 +128,6 @@ async def startup_event():
         except Exception as e:
             logger.exception("FATAL: Failed to initialize Llama: %s", e)
             app.state.llama = None
-
-# ---------------------------------------------------------------------
-# Utilities
-# ---------------------------------------------------------------------
 
 def check_models_or_raise():
     """Check if all required models are loaded, or raise HTTPException."""
@@ -187,7 +151,7 @@ def retrieve_contexts(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     return contexts
 
 # ---------------------------------------------------------------------
-# Routes
+# API Routes
 # ---------------------------------------------------------------------
 
 @app.post("/v1/query")
@@ -204,17 +168,13 @@ async def query_endpoint(req: QueryRequest):
     if not req.query:
         raise HTTPException(status_code=400, detail="Query text required.")
 
-    # 1. Retrieve Context
     contexts = retrieve_contexts(req.query, top_k=req.top_k or 5)
 
-    # 2. Build Messages
     messages = build_chat_messages(req.query, contexts)
 
-    # 3. Run Llama Completion
     try:
         start_time = time.time()
 
-        # We use create_chat_completion for Instruct models
         resp = app.state.llama.create_chat_completion(
             messages=messages,
             **settings.LLAMA_DECODE_OPTIONS,
@@ -222,7 +182,6 @@ async def query_endpoint(req: QueryRequest):
 
         text = resp["choices"][0]["message"]["content"].strip()
 
-        # Extract token usage from llama-cpp response
         usage = resp.get("usage", {
             "prompt_tokens": 0,
             "completion_tokens": len(text.split()),
@@ -233,7 +192,7 @@ async def query_endpoint(req: QueryRequest):
         logger.exception("Llama generation error: %s", e)
         return JSONResponse(status_code=500, content={"error": {"message": "Model generation failed"}})
 
-    # 4. Build and return OpenAPI-compliant response
+    # Build and return OpenAPI-compliant response
     response_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
     model_name = "local-llama-3-8b"
     created_time = int(start_time)
@@ -273,13 +232,10 @@ async def stream_query(req: QueryRequest):
     if not req.query:
         raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
 
-    # 1. Retrieve Context
     contexts = retrieve_contexts(req.query, top_k=req.top_k or 5)
 
-    # 2. Build Messages
     messages = build_chat_messages(req.query, contexts)
 
-    # 3. Get asyncio loop and create queue
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
 
@@ -289,23 +245,19 @@ async def stream_query(req: QueryRequest):
         and push tokens into the asyncio queue.
         """
         try:
-            # create_chat_completion with stream=True returns a generator
             for chunk in app.state.llama.create_chat_completion(
                 messages=messages,
                 stream=True,
                 **settings.LLAMA_DECODE_OPTIONS,
             ):
-                # Put the entire compliant chunk from llama-cpp into the queue
                 queue.put_nowait(chunk)
 
         except Exception as e:
             logger.exception("Streaming generation failed: %s", e)
             queue.put_nowait(f"[ERROR_GENERATION]{e}")
         finally:
-            # Signal that generation is done
             queue.put_nowait("[GEN_DONE]")
 
-    # Kick off background generation in a thread
     loop.run_in_executor(None, generate_in_thread)
 
     async def sse_generator() -> AsyncGenerator[str, None]:
@@ -323,43 +275,29 @@ async def stream_query(req: QueryRequest):
             while True:
                 item = await queue.get()
 
-                # --- THIS IS THE FIX ---
-                # Yield only the string "[DONE]"
-                # EventSourceResponse will format it to "data: [DONE]\n\n"
                 if item == "[GEN_DONE]":
                     yield "[DONE]"
                     break
-                # --- END FIX ---
 
                 if isinstance(item, str) and item.startswith("[ERROR_GENERATION]"):
                     err_msg = item[len("[ERROR_GENERATION]"):]
                     error_chunk = {"error": {"message": err_msg}}
-                    # --- THIS IS THE FIX ---
-                    # Yield the JSON string of the error
                     yield json.dumps(error_chunk)
                     yield "[DONE]"
-                    # --- END FIX ---
+
                     break
 
-                # 'item' is the chunk dictionary from llama-cpp
                 chunk = item
 
-                # The first chunk from llama-cpp might not have the 'role'
-                # Let's manually inject it if it's the first chunk
                 if first_chunk:
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
                     if "role" not in delta:
                         delta["role"] = "assistant"
                     first_chunk = False
 
-                # --- THIS IS THE FIX ---
-                # Yield *only* the JSON string.
-                # EventSourceResponse will format it to "data: {...}\n\n"
                 yield json.dumps(chunk)
-                # --- END FIX ---
 
         except asyncio.CancelledError:
-            # This catches client disconnects
             logger.warning("SSE stream client disconnected.")
         except Exception as e:
             logger.error(f"SSE stream error: {e}")
@@ -371,8 +309,7 @@ async def stream_query(req: QueryRequest):
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",  # disables proxy buffering
+        "X-Accel-Buffering": "no",
     }
 
-    # EventSourceResponse correctly handles formatting strings yielded by sse_generator
     return EventSourceResponse(sse_generator(), headers=headers)
