@@ -3,7 +3,7 @@ import logging
 import json
 import uuid
 import sqlite3
-from typing import List, Optional, AsyncGenerator, Dict, Any
+from typing import List, Optional, AsyncGenerator, Dict, Any, Tuple
 import asyncio
 
 from fastapi import FastAPI, HTTPException, Request, Body
@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from llama_cpp import Llama
+import faiss # Import faiss to use its types in hints
 
 from .models import QueryRequest
 from .embedding_service import EmbeddingService
@@ -35,9 +36,11 @@ class AppState:
     """Holds the loaded models and index."""
     def __init__(self):
         self.embedding: Optional[EmbeddingService] = None
-        self.index: Optional[Any] = None  # faiss.Index
+        self.index: Optional[faiss.Index] = None  # faiss.Index
         self.id_map: Optional[List[str]] = None # Maps Faiss index to chunk ID
         self.llama: Optional[Llama] = None
+        # Lock to protect index/id_map during reloads
+        self.reload_lock = asyncio.Lock()
 
 app.state = AppState()
 
@@ -75,6 +78,27 @@ def build_chat_messages(query: str, contexts: List[Dict[str, Any]]) -> List[Dict
     return messages
 
 
+def _load_index_data() -> Tuple[Optional[faiss.Index], Optional[List[str]]]:
+    """
+    Tries to load the Faiss index and ID map using the
+    embedding service on app.state.
+    """
+    if app.state.embedding is None:
+        logger.error("Cannot load index, embedding service not available.")
+        return None, None
+
+    try:
+        index, id_map = app.state.embedding.load_index()
+        logger.info("Vector index and ID map re-loaded successfully.")
+        return index, id_map
+    except FileNotFoundError:
+        logger.warning("Vector index not found. Please run indexing before using the API.")
+        return None, None
+    except Exception as e:
+        logger.exception("Failed to load vector index: %s", e)
+        return None, None
+
+
 @app.on_event("startup")
 async def startup_event():
     """Load embeddings, vector index, and Llama model at startup."""
@@ -88,20 +112,7 @@ async def startup_event():
         app.state.embedding = None
 
     if app.state.embedding:
-        try:
-            # Load_index now returns the index and the ID map
-            index, id_map = app.state.embedding.load_index()
-            app.state.index = index
-            app.state.id_map = id_map
-            logger.info("Vector index and ID map loaded successfully.")
-        except FileNotFoundError:
-            logger.warning("Vector index not found at startup. Please run indexing before using the API.")
-            app.state.index = None
-            app.state.id_map = None
-        except Exception as e:
-            logger.exception("Failed to load vector index: %s", e)
-            app.state.index = None
-            app.state.id_map = None
+        app.state.index, app.state.id_map = _load_index_data()
 
     if not settings.LLAMA_MODEL_PATH or not settings.LLAMA_MODEL_PATH.exists():
         logger.error("FATAL: Llama model path not found: %s", settings.LLAMA_MODEL_PATH)
@@ -122,37 +133,45 @@ async def startup_event():
             logger.exception("FATAL: Failed to initialize Llama: %s", e)
             app.state.llama = None
 
-def check_models_or_raise():
+async def check_models_or_raise():
     """Check if all required models are loaded, or raise HTTPException."""
-    if app.state.embedding is None:
-        raise HTTPException(status_code=500, detail="Embedding model not loaded on server.")
-    if app.state.llama is None:
-        raise HTTPException(status_code=500, detail="Llama model not loaded on server.")
-    # Check for index AND id_map now
-    if app.state.index is None or app.state.id_map is None:
-        raise HTTPException(status_code=503, detail="Vector index not available. Run indexing first.")
+    # Acquire lock to ensure we read a consistent state
+    async with app.state.reload_lock:
+        if app.state.embedding is None:
+            raise HTTPException(status_code=500, detail="Embedding model not loaded on server.")
+        if app.state.llama is None:
+            raise HTTPException(status_code=500, detail="Llama model not loaded on server.")
+        if app.state.index is None or app.state.id_map is None:
+            raise HTTPException(status_code=503, detail="Vector index not available. Run indexing first.")
 
 
-def retrieve_contexts(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+async def retrieve_contexts(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """
     Retrieve top-k code chunks for a given query.
-    1. Search Faiss for top-k chunk IDs.
+    1. Search Faiss for top-k chunk IDs (under lock).
     2. Fetch chunk text from SQLite using IDs.
     """
-    if app.state.index is None or app.state.id_map is None or app.state.embedding is None:
-        logger.error("Retrieval attempted but index or embedding model is not loaded.")
-        raise HTTPException(status_code=503, detail="Vector index not available. Run indexing first.")
+    context_ids = []
 
-    # 1. Embed query and search Faiss for chunk IDs
-    qvec = app.state.embedding.embed([normalize_whitespace(query)])[0]
-    # Search now returns [{"score": float, "id": str}]
-    results = app.state.embedding.search(app.state.index, app.state.id_map, qvec.reshape(1, -1), top_k=top_k)
+    # Acquire lock to ensure index is not reloaded during retrieval
+    async with app.state.reload_lock:
+        if app.state.index is None or app.state.id_map is None or app.state.embedding is None:
+            logger.error("Retrieval attempted but index or embedding model is not loaded.")
+            raise HTTPException(status_code=503, detail="Vector index not available. Run indexing first.")
 
-    context_ids = [r["id"] for r in results]
+        # 1. Embed query and search Faiss for chunk IDs
+        qvec = app.state.embedding.embed([normalize_whitespace(query)])[0]
+        # Search now returns [{"score": float, "id": str}]
+        results = app.state.embedding.search(app.state.index, app.state.id_map, qvec.reshape(1, -1), top_k=top_k)
+
+        context_ids = [r["id"] for r in results]
+
+    # --- Lock is released here ---
+
     if not context_ids:
         return []
 
-    # 2. Fetch chunk text from SQLite
+    # 2. Fetch chunk text from SQLite (occurs outside the lock)
     contexts = []
     conn = None
     try:
@@ -193,14 +212,14 @@ async def query_endpoint(req: QueryRequest):
     Returns an OpenAPI-compliant ChatCompletionResponse.
     """
     try:
-        check_models_or_raise()
+        await check_models_or_raise()
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": {"message": e.detail}})
 
     if not req.query:
         raise HTTPException(status_code=400, detail="Query text required.")
 
-    contexts = retrieve_contexts(req.query, top_k=req.top_k or 5)
+    contexts = await retrieve_contexts(req.query, top_k=req.top_k or 5)
 
     messages = build_chat_messages(req.query, contexts)
 
@@ -257,14 +276,14 @@ async def stream_query(req: QueryRequest):
     Streams partial responses as 'data: ...' chunks.
     """
     try:
-        check_models_or_raise()
+        await check_models_or_raise()
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": {"message": e.detail}})
 
     if not req.query:
         raise HTTPException(status_code=400, detail="Missing 'query' in request body.")
 
-    contexts = retrieve_contexts(req.query, top_k=req.top_k or 5)
+    contexts = await retrieve_contexts(req.query, top_k=req.top_k or 5)
 
     messages = build_chat_messages(req.query, contexts)
 
@@ -345,3 +364,34 @@ async def stream_query(req: QueryRequest):
     }
 
     return EventSourceResponse(sse_generator(), headers=headers)
+
+
+@app.post("/v1/admin/reload-index")
+async def reload_index_endpoint():
+    """
+    Admin endpoint to manually reload the vector index and ID map
+    from disk. This allows for updating the index without
+    restarting the server.
+    """
+    logger.info("Received request to reload vector index...")
+
+    # Use the helper to load new data
+    new_index, new_id_map = _load_index_data()
+
+    if new_index is None or new_id_map is None:
+        logger.error("Index reload failed. Keeping old index.")
+        raise HTTPException(
+            status_code=500,
+            detail="Index reload failed. Check server logs."
+        )
+
+    # Acquire lock to safely swap the state
+    async with app.state.reload_lock:
+        app.state.index = new_index
+        app.state.id_map = new_id_map
+
+    logger.info("Index reload successful. New index is live.")
+    return JSONResponse(
+        status_code=200,
+        content={"message": "Index reloaded successfully."}
+    )

@@ -1,6 +1,7 @@
 import logging
 import sys
 import argparse
+import multiprocessing
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -12,6 +13,33 @@ from .utils import find_source_files, read_file_text, chunk_text, normalize_whit
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("oca.indexer")
 
+
+def _process_file(file_path: Path) -> List[Dict[str, Any]]:
+    """
+    Worker function for multiprocessing.
+    Reads, normalizes, and chunks a single file.
+    Returns a list of doc dicts for that file.
+    """
+    try:
+        text = read_file_text(file_path)
+        if not text:
+            logger.warning("Skipping empty or unreadable file: %s", file_path)
+            return []
+
+        text = normalize_whitespace(text)
+        chunks = chunk_text(text, chunk_size=settings.CHUNK_SIZE, overlap=settings.CHUNK_OVERLAP)
+
+        file_docs = []
+        for i, chunk in enumerate(chunks):
+            file_docs.append({
+                "id": f"{file_path.resolve()}::{i}",
+                "path": str(file_path.resolve()),
+                "chunk": chunk,
+            })
+        return file_docs
+    except Exception as e:
+        logger.error(f"Failed to process file {file_path}: {e}")
+        return []
 
 def index_codebase(codebase_path: Path, embedding_model_path: str = None) -> bool:
     """
@@ -26,34 +54,27 @@ def index_codebase(codebase_path: Path, embedding_model_path: str = None) -> boo
     """
     logger.info("Starting indexing of codebase: %s", codebase_path)
 
-    # 1. Find all source files (now filtered)
+    # 1. Find all source files
     files = find_source_files(codebase_path, settings.INDEX_EXTENSIONS)
     if not files:
         logger.warning("No source files found with extensions %s in %s", settings.INDEX_EXTENSIONS, codebase_path)
         return False
 
+    # 2. Read, normalize, and chunk files in parallel
+    logger.info("Processing %d files in parallel...", len(files))
+    num_cores = multiprocessing.cpu_count()
+    logger.info("Using %d CPU cores...", num_cores)
+
     docs: List[Dict[str, Any]] = []
-    counter = 0
+    with multiprocessing.Pool(processes=num_cores) as pool:
+        # map applies _process_file to each item in files
+        # results is a list of lists (List[List[Dict]])
+        results = pool.map(_process_file, files)
 
-    # 2. Read, normalize, and chunk files (now with better chunker)
-    for f in files:
-        text = read_file_text(f)
-        if not text:
-            logger.warning("Skipping empty or unreadable file: %s", f)
-            continue
+        # Flatten the list of lists
+        docs = [doc for file_docs in results for doc in file_docs]
 
-        # Normalize whitespace to keep embedding input stable
-        text = normalize_whitespace(text)
-
-        chunks = chunk_text(text, chunk_size=settings.CHUNK_SIZE, overlap=settings.CHUNK_OVERLAP)
-
-        for i, chunk in enumerate(chunks):
-            docs.append({
-                "id": f"{f.resolve()}::{i}",
-                "path": str(f.resolve()),
-                "chunk": chunk,
-            })
-            counter += 1
+    counter = len(docs)
 
     if not docs:
         logger.warning("No text chunks were generated from the source files.")
@@ -86,7 +107,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         default=None,
-        help=f"Path to the embedding model (overrides config). Default: {settings.EMBEDDING_MODEL_PATH}"
+        help=f"Path or name of the embedding model (overrides config). Default: {settings.EMBEDDING_MODEL_PATH}"
     )
     args = parser.parse_args()
 

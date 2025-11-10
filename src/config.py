@@ -15,28 +15,31 @@ class Settings(BaseSettings):
     """
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
 
+    # Base directories
+    BASE_DIR: Path = Path.cwd()
+    DATA_DIR: Path = BASE_DIR / "data"
+    MODELS_DIR: Path = BASE_DIR / "models"
+
     # ---------------------------------------------------------------------
     # Paths
     # ---------------------------------------------------------------------
     CODEBASE_PATH: Path = Field(
-        default_factory=lambda: get_home() / "projects/rag-starter/sample_code",
+        default=BASE_DIR / "sample_code",
         description="Path to the codebase root to be indexed."
     )
     EMBEDDING_MODEL_PATH: Path = Field(
-        # Updated to a more powerful model.
         # This can be a path or a HuggingFace model name.
         default="sentence-transformers/all-mpnet-base-v2",
         description="Path or name of the SentenceTransformer embedding model."
     )
     LLAMA_MODEL_PATH: Path = Field(
-        default_factory=lambda: get_home() / "projects/llm-models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+        default=MODELS_DIR / "mistral-7b-instruct-v0.2.Q4_K_M.gguf",
         description="Path to the Llama GGUF model file."
     )
 
     # ---------------------------------------------------------------------
     # Storage paths
     # ---------------------------------------------------------------------
-    DATA_DIR: Path = Path.cwd() / "data"
     VECTOR_INDEX_PATH: Path = DATA_DIR / "vector_index.faiss"
     DB_PATH: Path = DATA_DIR / "docstore.db"
     ID_MAP_PATH: Path = DATA_DIR / "id_map.json"
@@ -90,5 +93,6 @@ class Settings(BaseSettings):
 # Create a single settings instance to be imported by other modules
 settings = Settings()
 
-# Ensure data directory exists
+# Ensure data and model directories exist
 settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
+settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
