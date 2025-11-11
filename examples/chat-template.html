@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Chat</title>
+
+<!-- Highlight.js for syntax highlighting -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/base16/solarized-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<style>
+  :root {
+    --bg-color: #ffffff;
+    --text-color: #222;
+    --user-bubble: #f2f2f2;
+    --assistant-text: #222;
+    --border-color: #ddd;
+    --button-bg: #f9f9f9;
+    --button-hover: #eee;
+    --toggle-hover: #f0f0f0;
+    --bg-rgb: 255, 255, 255;
+  }
+
+  [data-theme="dark"] {
+    --bg-color: #1e1e1e;
+    --text-color: #eee;
+    --user-bubble: #2c2c2c;
+    --assistant-text: #ddd;
+    --border-color: #333;
+    --button-bg: #2a2a2a;
+    --button-hover: #3a3a3a;
+    --toggle-hover: #2d2d2d;
+    --bg-rgb: 30, 30, 30;
+  }
+
+  body {
+    font-family: system-ui, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3rem;
+    background: rgba(var(--bg-rgb), 0.8);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    z-index: 100;
+    box-sizing: border-box;
+  }
+
+  header h1 {
+    font-size: 1rem;
+    margin: 0;
+  }
+
+  #theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    color: var(--text-color);
+    width: 2.3rem;
+    height: 2.3rem;
+    border-radius: 50%;
+    transition: background 0.2s, transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  #theme-toggle:hover {
+    background: var(--toggle-hover);
+    transform: rotate(10deg);
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    padding-top: 3rem;
+    overflow-y: auto;
+  }
+
+  .chat-container {
+    width: 100%;
+    max-width: 800px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .message {
+    max-width: 75%;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .message.user {
+    align-self: flex-end;
+    background: var(--user-bubble);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  .message.assistant {
+    align-self: flex-start;
+    background: transparent;
+    color: var(--assistant-text);
+  }
+
+  pre {
+    background: #2d2d2d;
+    color: #ddd;
+    padding: 0.75rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.9rem;
+  }
+
+  code {
+    font-family: monospace;
+  }
+
+  .welcome {
+    text-align: center;
+    margin-top: 25vh;
+    font-size: 1.2rem;
+    color: #888;
+  }
+
+  .input-area {
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-color);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .preset-questions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    justify-content: center;
+  }
+
+  .preset-questions button {
+    background: var(--button-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: background 0.2s;
+  }
+
+  .preset-questions button:hover {
+    background: var(--button-hover);
+  }
+
+  .input-box {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 800px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.5rem 1rem;
+  }
+
+  .input-box textarea {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 1rem;
+    color: var(--text-color);
+    resize: none;
+    overflow: hidden;
+    line-height: 1.4;
+  }
+
+  .input-box button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0.5rem;
+  }
+
+  .input-box svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Typing indicator dots */
+  .message.assistant .dots {
+    color: #888;
+    font-weight: bold;
+    display: inline-block;
+    width: 2em;
+    text-align: left;
+  }
+</style>
+</head>
+
+<body>
+  <header>
+    <h1>AI Code Assistant</h1>
+    <button id="theme-toggle" title="Toggle Theme">🌙</button>
+  </header>
+
+  <main>
+    <div class="chat-container" id="chat-container">
+      <div class="welcome" id="welcome">How can I help you today?</div>
+    </div>
+  </main>
+
+  <div class="input-area">
+    <div class="preset-questions" id="preset-questions">
+      <button>Explain recursion</button>
+      <button>Reverse a string in Python</button>
+      <button>Tell me a programming joke</button>
+      <button>Show an example of async/await</button>
+      <button>What is a Python decorator?</button>
+    </div>
+    <div class="input-box">
+      <textarea id="user-input" rows="1" placeholder="Send a message..."></textarea>
+      <button id="send-btn" title="Send">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+<script>
+  const chatContainer = document.getElementById('chat-container');
+  const userInput = document.getElementById('user-input');
+  const sendBtn = document.getElementById('send-btn');
+  const welcome = document.getElementById('welcome');
+  const presetContainer = document.getElementById('preset-questions');
+  const themeToggle = document.getElementById('theme-toggle');
+
+  const predefinedAnswers = {
+    "Explain recursion": "**Recursion** is when a function calls itself until a base condition is met.\n\n```python\n# Example: factorial using recursion\ndef factorial(n):\n    return 1 if n == 0 else n * factorial(n-1)\n\nprint(factorial(5))  # 120\n```",
+    "Reverse a string in Python": "You can reverse a string in Python easily using slicing:\n\n```python\ntext = 'hello'\nreversed_text = text[::-1]\nprint(reversed_text)  # 'olleh'\n```",
+    "Tell me a programming joke": "Sure 😄\n\n> Why do programmers prefer dark mode?\n> Because light attracts bugs!",
+    "Show an example of async/await": "Here’s a short JavaScript example:\n\n```javascript\nasync function fetchData() {\n  try {\n    const res = await fetch('https://api.example.com/data');\n    const data = await res.json();\n    console.log(data);\n  } catch (err) {\n    console.error(err);\n  }\n}\n```",
+    "What is a Python decorator?": "A **decorator** lets you modify a function’s behavior without changing its code.\n\n```python\ndef log(func):\n    def wrapper(*args, **kwargs):\n        print(`Calling ${func.__name__}`)\n        return func(*args, **kwargs)\n    return wrapper\n\n@log\ndef greet():\n    print('Hello!')\n\ngreet()\n```"
+  };
+
+  function appendMessage(content, sender) {
+    if (welcome) welcome.remove();
+    presetContainer.style.display = 'none';
+
+    const msg = document.createElement('div');
+    msg.classList.add('message', sender);
+    if (sender === 'assistant') {
+      msg.innerHTML = marked.parse(content);
+    } else {
+      msg.textContent = content;
+    }
+    chatContainer.appendChild(msg);
+    hljs.highlightAll();
+    msg.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
+  function showTypingIndicator() {
+    const typingMsg = document.createElement('div');
+    typingMsg.classList.add('message', 'assistant');
+    typingMsg.id = 'typing-indicator';
+    typingMsg.innerHTML = `<span class="dots">●</span>`;
+    chatContainer.appendChild(typingMsg);
+    typingMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+    const dots = typingMsg.querySelector('.dots');
+    let count = 1;
+    const interval = setInterval(() => {
+      count = (count % 3) + 1;
+      dots.textContent = '●'.repeat(count);
+    }, 400);
+
+    return { element: typingMsg, interval };
+  }
+
+  function handleUserMessage(text) {
+    appendMessage(text, 'user');
+
+    // Show typing indicator
+    const { element, interval } = showTypingIndicator();
+
+    setTimeout(() => {
+      clearInterval(interval);
+      element.remove(); // Remove typing indicator
+
+      const reply = predefinedAnswers[text] || "I'm just a mock assistant for now 🤖";
+      appendMessage(reply, 'assistant');
+    }, 1000 + Math.random() * 800); // Random "thinking" time
+  }
+
+  sendBtn.addEventListener('click', () => {
+    const text = userInput.value.trim();
+    if (text) {
+      handleUserMessage(text);
+      userInput.value = '';
+      userInput.style.height = 'auto';
+    }
+  });
+
+  userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  userInput.addEventListener('input', () => {
+    userInput.style.height = 'auto';
+    userInput.style.height = userInput.scrollHeight + 'px';
+  });
+
+  presetContainer.addEventListener('click', (e) => {
+    if (e.target.tagName === 'BUTTON') {
+      handleUserMessage(e.target.textContent);
+    }
+  });
+
+  themeToggle.addEventListener('click', () => {
+    const current = document.body.getAttribute('data-theme');
+    const newTheme = current === 'dark' ? 'light' : 'dark';
+    document.body.setAttribute('data-theme', newTheme);
+    themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+  });
+
+  document.body.setAttribute('data-theme', 'light');
+</script>
+</body>
+</html>
