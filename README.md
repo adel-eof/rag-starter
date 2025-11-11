@@ -14,7 +14,6 @@ This repository is built to be a robust starting point, focusing on performance,
 * **Parallelized Indexing:** Uses `multiprocessing` to quickly scan, filter, and chunk large codebases, making the indexing process significantly faster.
 * **Smart Chunking & Filtering:** Uses a code-aware text splitter and filters out common "junk" directories (like `node_modules`, `.git`, etc.) for a clean, relevant index.
 * **Live Index Reloading:** Includes a `POST /v1/admin/reload-index` endpoint to load a new index without restarting the server.
-* **Svelte Frontend:** Includes a simple, pre-configured web interface for chatting.
 
 ## ⚙️ Architecture Overview
 
@@ -46,7 +45,6 @@ The system is split into two main processes: **Indexing** and **Querying**.
     * **macOS:** `xcode-select --install`
     * **Linux (Ubuntu):** `sudo apt-get install build-essential`
     * **Windows:** Install "C++ build tools" from the Visual Studio Installer.
-* [Node.js](https://nodejs.org/) (Optional, for the frontend)
 
 ### 2. Installation
 
@@ -187,7 +185,6 @@ data: [DONE]
 │   ├── docstore.db       # SQLite DB for text chunks
 │   ├── id_map.json       # Maps Faiss IDs to DB IDs
 │   └── vector_index.faiss  # Faiss HNSW index
-├── frontend/             # Svelte frontend
 ├── models/               # Directory for your GGUF LLM
 ├── sample_code/          # Example codebase to index
 └── src/
@@ -198,5 +195,5 @@ data: [DONE]
     ├── utils.py          # File/text utilities, chunking
     └── models.py         # Pydantic API models
 
-⚖️ License
-This project is open-sourced. Please feel free to adapt it to your needs.
+
+TODO: Implement a web frontend for chat user interface
