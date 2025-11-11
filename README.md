@@ -111,19 +111,15 @@ Start the FastAPI server using Uvicorn:
 uvicorn src.server:app --host 0.0.0.0 --port 8000
 ```
 
-The server will load the models and index. Once you see "Application startup complete," it's ready.
-
-### Step 3: Use the Frontend (Optional)
-In a new terminal, navigate to the frontend directory:
+or
 
 ```sh
-cd frontend
-npm install
-npm run dev
-Open http://localhost:5173 in your browser to start chatting with your code.
+python -m src.server
 ```
 
-### Step 4: Query the API Directly
+The server will load the models and index. Once you see "Application startup complete," it's ready.
+
+### Step 3: Query the API Directly
 You can also use curl or any HTTP client to interact with the API.
 
 #### Standard Query (Non-streaming)
@@ -135,6 +131,31 @@ curl -X POST http://localhost:8000/v1/query \
   "query": "What is the function of build_chat_messages?"
 }'
 ```
+**Example API Response**
+
+```json
+{
+  "id": "chatcmpl-849d3fd258db",
+  "object": "chat.completion",
+  "created": 1762825986,
+  "model": "local-llama-3-8b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The function `build_chat_messages` is used to build the 'messages' list for the Llama chat completion API"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1058,
+    "completion_tokens": 131,
+    "total_tokens": 1189
+  }
+}
+```
 
 #### Streaming Query
 
@@ -144,6 +165,20 @@ curl -X POST http://localhost:8000/v1/query/stream \
 -d '{
   "query": "Show me the chunk_text function from utils.py"
 }'
+```
+**Example streaming data response**
+
+```
+data: {"id": "chatcmpl-433393e7-0f8f-4af3-a72f-eebac75e01d9", "model": "/home/user/projects/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf", "created": 1762826551, "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {"role": "assistant"}, "logprobs": null, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-433393e7-0f8f-4af3-a72f-eebac75e01d9", "model": "/home/user/projects/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf", "created": 1762826551, "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {"content": "Hello"}, "logprobs": null, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-433393e7-0f8f-4af3-a72f-eebac75e01d9", "model": "/home/user/projects/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf", "created": 1762826551, "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {"content": "words"}, "logprobs": null, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-433393e7-0f8f-4af3-a72f-eebac75e01d9", "model": "/home/user/projects/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf", "created": 1762826551, "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {}, "logprobs": null, "finish_reason": "stop"}]}
+
+data: [DONE]
+
 ```
 
 📁 Project Structure
