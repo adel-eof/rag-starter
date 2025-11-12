@@ -56,4 +56,7 @@ Thumbs.db
 
 # user specific
 sample_code/
+data/
+frontend/
 requirements.txt
+.env

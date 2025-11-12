@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini-Style AI Chat</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Roboto', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#1A73E8',
+                        'on-primary': '#FFFFFF',
+                        'primary-container': '#D3E3FF',
+                        'on-primary-container': '#041E49',
+                        'surface': '#FFFFFF',
+                        'on-surface': '#1F1F1F',
+                        'surface-container': '#F0F4F9',
+                        'on-surface-container': '#1F1F1F',
+                        'outline': '#C4C7C5',
+                        'dark-primary': '#8AB4F8',
+                        'dark-primary-container': '#334D6F',
+                        'dark-on-primary-container': '#D3E3FF',
+                        'dark-surface': '#1F1F1F',
+                        'dark-on-surface': '#E1E3E3',
+                        'dark-surface-container': '#1A1A1A',
+                        'dark-on-surface-container': '#E1E3E3',
+                        'dark-outline': '#5F6368',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #F0F4F9; }
+        ::-webkit-scrollbar-thumb { background: #C4C7C5; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #A4A7A5; }
+
+        .prose > :first-child { margin-top: 0; }
+        .prose > :last-child { margin-bottom: 0; }
+        .prose strong { font-weight: 600; }
+        .prose ul { list-style-type: disc; margin-left: 1.5rem; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose ol { list-style-type: decimal; margin-left: 1.5rem; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose li { margin-top: 0.25em; margin-bottom: 0.25em; }
+
+        .prose :not(pre) > code {
+            background-color: #EAEAEA;
+            color: #333;
+            padding: 0.25em 0.4em;
+            border-radius: 0.25rem;
+            font-size: 0.9em;
+            dark:bg-dark-surface dark:text-dark-on-surface;
+        }
+
+        .prose pre {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+    </style>
+</head>
+
+<body class="bg-surface-container text-on-surface dark:bg-dark-surface-container dark:text-dark-on-surface h-screen flex flex-col font-sans antialiased">
+
+    <header class="sticky top-0 z-10 flex items-center h-16 px-4 shadow-sm bg-surface text-on-surface border-b border-outline/30 dark:bg-dark-surface dark:text-dark-on-surface dark:border-dark-outline/30">
+        <div class="max-w-3xl mx-auto w-full flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <svg class="text-primary" width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C11.32 2 10.66 2.12 10.04 2.36C11.12 2.9 12 4 12 5.27C12 6.53 11.12 7.63 10.04 8.18C10.66 8.42 11.32 8.54 12 8.54C15.6 8.54 18.54 5.6 18.54 2C18.54 2 18.54 2 18.54 2C15.82 2 13.19 3.23 12 5.27C10.81 3.23 8.18 2 5.46 2C5.46 2 5.46 2 5.46 2C8.4 2 11.34 4.93 11.34 8.54C11.34 12.14 8.4 15.08 5.46 15.08C5.46 15.08 5.46 15.08 5.46 15.08C8.18 15.08 10.81 13.85 12 11.81C13.19 13.85 15.82 15.08 18.54 15.08C18.54 15.08 18.54 15.08 18.54 15.08C15.07 15.08 12.04 12.22 12 8.54C12 7.27 12.88 6.17 13.96 5.62C13.34 5.38 12.68 5.27 12 5.27C8.4 5.27 5.46 8.2 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C1Z" fill="currentColor"></path>
+                </svg>
+                <h1 class="text-xl font-medium">Adel-GPT</h1>
+            </div>
+
+            <button id="theme-toggle" class="w-10 h-10 rounded-full flex items-center justify-center
+                                           hover:bg-surface-container text-on-surface
+                                           dark:text-dark-on-surface dark:hover:bg-dark-surface-container">
+                <svg class="w-6 h-6 block dark:hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-6.364-.386 1.591-1.591M3 12h2.25m.386-6.364 1.591 1.591M12 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                </svg>
+                <svg class="w-6 h-6 hidden dark:block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-6.748Z" />
+                </svg>
+            </button>
+
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4">
+
+        <div id="empty-state" class="max-w-3xl mx-auto w-full h-full flex flex-col justify-center items-center text-center">
+            <div class="flex items-center gap-3 mb-4">
+                <!-- <svg class="text-primary w-12 h-12" width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C11.32 2 10.66 2.12 10.04 2.36C11.12 2.9 12 4 12 5.27C12 6.53 11.12 7.63 10.04 8.18C10.66 8.42 11.32 8.54 12 8.54C15.6 8.54 18.54 5.6 18.54 2C18.54 2 18.54 2 18.54 2C15.82 2 13.19 3.23 12 5.27C10.81 3.23 8.18 2 5.46 2C5.46 2 5.46 2 5.46 2C8.4 2 11.34 4.93 11.34 8.54C11.34 12.14 8.4 15.08 5.46 15.08C5.46 15.08 5.46 15.08 5.46 15.08C8.18 15.08 10.81 13.85 12 11.81C13.19 13.85 15.82 15.08 18.54 15.08C18.54 15.08 18.54 15.08 18.54 15.08C15.07 15.08 12.04 12.22 12 8.54C12 7.27 12.88 6.17 13.96 5.62C13.34 5.38 12.68 5.27 12 5.27C8.4 5.27 5.46 8.2 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C15.6 11.81 13.19 10.74 12 8.54C12 9.8 12.88 10.9 13.96 11.45C13.34 11.69 12.68 11.81 12 11.81C8.4 11.81 5.46 14.75 5.46 18.35C5.46 18.35 5.46 18.35 5.46 18.35C8.4 18.35 11.34 15.42 11.34 11.81C11.34 8.2 8.4 5.27 5.46 5.27C5.46 5.27 5.46 5.27 5.46 5.27C8.18 5.27 10.81 6.5 12 8.54C13.19 6.5 15.82 5.27 18.54 5.27C18.54 5.27 18.54 5.27 18.54 5.27C15.07 5.27 12.04 8.12 12 11.81C12 13.08 12.88 14.18 13.96 14.73C13.34 14.97 12.68 15.08 12 15.08C8.4 15.08 5.46 18.02 5.46 21.62C5.46 21.62 5.46 21.62 5.46 21.62C8.18 21.62 10.81 20.39 12 18.35C13.19 20.39 15.82 21.62 18.54 21.62C18.54 21.62 18.54 21.62 18.54 21.62C15.07 21.62 12.04 18.77 12 15.08C12 16.35 12.88 17.45 13.96 18C13.34 18.24 12.68 18.35 12 18.35C8.4 18.35 5.46 21.29 5.46 24.89C5.46 24.89 5.46 24.89 5.46 24.89C8.4 24.89 11.34 21.95 11.34 18.35C11.34 14.75 8.4 11.81 5.46 11.81C5.46 11.81 5.46 11.81 5.46 11.81C8.18 11.81 10.81 13.04 12 15.08C13.19 13.04 15.82 11.81 18.54 11.81C18.54 11.81 18.54 11.81 18.54 11.81C1Z" fill="currentColor"></path>
+                </svg> -->
+                <h1 class="text-4xl font-medium text-on-surface/80 dark:text-dark-on-surface/80">
+                    How can I help you today?
+                </h1>
+            </div>
+        </div>
+
+        <div id="chat-container" class="max-w-3xl mx-auto w-full space-y-4 hidden">
+            </div>
+    </main>
+
+    <footer class="sticky bottom-0 z-10 bg-surface pt-2 pb-4 shadow-[0_-2px_4px_rgba(0,0,0,0.05)] dark:bg-dark-surface">
+        <form id="chat-form" class="max-w-3xl mx-auto w-full px-4 flex items-center gap-2">
+            <div class="flex-1 relative">
+                <input type="text" id="chat-input"
+                       placeholder="Message Gemini..."
+                       autocomplete="off"
+                       class="w-full p-3.5 pr-14 bg-surface text-on-surface placeholder-on-surface/60
+                              border border-outline rounded-full
+                              focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none
+                              transition-colors
+                              dark:bg-dark-surface dark:text-dark-on-surface dark:border-dark-outline
+                              dark:placeholder-dark-on-surface/60 dark:focus:border-dark-primary">
+                <button type="submit" id="send-button"
+                        class="absolute right-2 top-1/2 -translate-y-1/2
+                               w-10 h-10 rounded-full bg-primary text-on-primary
+                               flex items-center justify-center
+                               hover:shadow-md transition-shadow
+                               disabled:bg-surface-container disabled:text-on-surface-container/50
+                               dark:disabled:bg-dark-surface-container
+                               dark:disabled:text-dark-on-surface/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </form>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // === Theme Toggle Logic ===
+            const themeToggle = document.getElementById('theme-toggle');
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            themeToggle.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+                if (document.documentElement.classList.contains('dark')) {
+                    localStorage.theme = 'dark';
+                } else {
+                    localStorage.theme = 'light';
+                }
+            });
+
+            // === DOM Elements ===
+            const chatContainer = document.getElementById('chat-container');
+            const chatForm = document.getElementById('chat-form');
+            const chatInput = document.getElementById('chat-input');
+            const sendButton = document.getElementById('send-button');
+            const emptyState = document.getElementById('empty-state'); // CHANGE: Get new element
+
+            // === Markdown & Highlight.js Config ===
+            marked.setOptions({
+                highlight: function(code, lang) {
+                    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                    return hljs.highlight(code, { language }).value;
+                }
+            });
+
+            // === State ===
+            let chatHistory = []; // CHANGE: History starts empty
+            let isLoading = false;
+
+            // === History Management ===
+            // CHANGE: Removed all localStorage logic.
+
+            renderChat(); // Call once on load to show the empty state
+
+            // === Event Listeners ===
+            chatForm.addEventListener('submit', handleFormSubmit);
+
+            window.sendSuggestion = async (text) => {
+                await sendUserMessage(text);
+            }
+
+            // === Core Functions ===
+
+            // CHANGE: Deleted the saveHistory() function
+
+            async function handleFormSubmit(event) {
+                event.preventDefault();
+                const prompt = chatInput.value.trim();
+                if (prompt) {
+                    chatInput.value = '';
+                    await sendUserMessage(prompt);
+                }
+            }
+
+            async function sendUserMessage(text) {
+                if (isLoading) return;
+                setLoading(true);
+
+                chatHistory.push({ role: 'user', content: text });
+                chatHistory.push({ role: 'assistant', typing: true });
+
+                // CHANGE: Removed saveHistory() call
+
+                renderChat();
+                scrollToBottom();
+
+                await getRealResponse(text);
+            }
+
+            async function getRealResponse(prompt) {
+                chatHistory.pop(); // Remove "Typing"
+                // CHANGE: Removed saveHistory() call
+
+                const messageId = 'msg-asst-' + Date.now();
+                chatHistory.push({
+                    id: messageId,
+                    role: 'assistant',
+                    content: '',
+                    suggestions: []
+                });
+                // CHANGE: Removed saveHistory() call
+
+                renderChat();
+                scrollToBottom();
+
+                const messageBubble = document.getElementById(messageId);
+                const contentEl = messageBubble.querySelector('.message-content');
+
+                try {
+                    const cleanHistory = chatHistory.slice(-4, -1).map(msg => ({
+                        "role": msg.role,
+                        "content": msg.content
+                    }));
+
+                    const payload = {
+                        "query": prompt,
+                        "history": cleanHistory
+                    };
+
+                    console.log("Sending FINAL payload:", JSON.stringify(payload, null, 2));
+
+                    const response = await fetch('/v1/query/stream', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let fullContent = "";
+                    const message = chatHistory.find(m => m.id === messageId);
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        const chunkString = decoder.decode(value);
+                        const lines = chunkString.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const jsonString = line.replace('data: ', '');
+
+                                if (jsonString === '[DONE]') {
+                                    handleStreamEnd(messageId, fullContent);
+                                    return;
+                                }
+
+                                let chunkData;
+                                try {
+                                    chunkData = JSON.parse(jsonString);
+                                    const delta = chunkData.choices[0]?.delta;
+
+                                    if (delta && delta.content) {
+                                        fullContent += delta.content;
+                                        if (message) {
+                                            message.content = fullContent; // Update history
+                                        }
+                                        contentEl.innerHTML = marked.parse(fullContent);
+                                        scrollToBottom();
+                                    }
+                                } catch (e) {
+                                    // Ignore partial JSON chunks
+                                }
+                            }
+                        }
+                    }
+                    handleStreamEnd(messageId, fullContent);
+
+                } catch (error) {
+                    console.error("Fetch Error:", error);
+                    contentEl.innerHTML = `**Error:**<br>Sorry, I couldn't connect. Please try again.`;
+                    contentEl.classList.add('text-red-600');
+                    setLoading(false);
+                }
+            }
+
+            function handleStreamEnd(messageId, finalContent) {
+                const message = chatHistory.find(m => m.id === messageId);
+                if (message) {
+                    message.content = finalContent;
+                    message.suggestions = ["Tell me more", "Give an example", "How does that work?"];
+                    // CHANGE: Removed saveHistory() call
+                }
+                setLoading(false);
+                renderChat();
+                scrollToBottom();
+            }
+
+            function setLoading(state) {
+                isLoading = state;
+                chatInput.disabled = state;
+                sendButton.disabled = state;
+            }
+
+            /**
+             * Renders the entire chat history to the DOM.
+             */
+            function renderChat() {
+                // CHANGE: Added new logic to toggle between empty state and chat list
+                if (chatHistory.length === 0) {
+                    emptyState.classList.remove('hidden');
+                    chatContainer.classList.add('hidden');
+                } else {
+                    emptyState.classList.add('hidden');
+                    chatContainer.classList.remove('hidden');
+
+                    chatContainer.innerHTML = ''; // Clear container
+                    chatHistory.forEach(message => {
+                        let messageEl;
+                        if (message.role === 'user') {
+                            messageEl = createUserMessage(message);
+                        } else if (message.typing) {
+                            messageEl = createTypingIndicator();
+                        } else {
+                            messageEl = createAssistantMessage(message);
+                        }
+                        chatContainer.appendChild(messageEl);
+                    });
+                }
+            }
+
+            function createUserMessage(message) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex justify-end';
+                wrapper.innerHTML = `
+                    <div class="max-w-[85%] rounded-2xl bg-primary-container text-on-primary-container p-3.5 shadow-sm
+                                dark:bg-dark-primary-container dark:text-dark-on-primary-container break-words">
+                        <p class="font-medium">${message.content}</p>
+                    </div>
+                `;
+                return wrapper;
+            }
+
+            function createAssistantMessage(message) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex justify-start items-start gap-3';
+
+                const chips = (message.suggestions && message.suggestions.length > 0)
+                    ? `<div class="flex flex-wrap gap-2 pt-3">
+                        ${message.suggestions.map(s => `
+                            <button
+                                class="px-4 py-2 bg-surface-container text-primary text-sm font-medium rounded-full hover:bg-primary-container/60 transition-colors
+                                       dark:bg-dark-surface dark:text-dark-primary dark:hover:bg-dark-primary-container/60"
+                                onclick="sendSuggestion('${s.replace(/'/g, "\\'")}')">
+                                ${s}
+                            </button>
+                        `).join('')}
+                       </div>`
+                    : '';
+
+                wrapper.innerHTML = `
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center mt-1 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                           <path d="M12 2a.7.7 0 0 1 .68.4l1.83 3.73 3.72 1.83a.7.7 0 0 1 .4.68.7.7 0 0 1-.4.68l-3.72 1.83-1.83 3.73a.7.7 0 0 1-.68.4.7.7 0 0 1-.68-.4L9.48 11.15l-3.72-1.83a.7.7 0 0 1-.4-.68.7.7 0 0 1 .4-.68l3.72-1.83L11.32 2.4A.7.7 0 0 1 12 2Z"/>
+                        </svg>
+                    </div>
+
+                    <div class="flex flex-col items-start max-w-[85%] min-w-0">
+                        <div id="${message.id}" class="rounded-2xl bg-surface p-3.5 shadow-sm
+                                                    dark:bg-dark-surface overflow-hidden">
+
+                            <div class="message-content prose" style="white-space: normal;">
+                                ${marked.parse(message.content)}
+                            </div>
+                        </div>
+                        ${chips}
+                    </div>
+                `;
+                return wrapper;
+            }
+
+            function createTypingIndicator() {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex justify-start items-start gap-3';
+                wrapper.innerHTML = `
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center mt-1 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                           <path d="M12 2a.7.7 0 0 1 .68.4l1.83 3.73 3.72 1.83a.7.7 0 0 1 .4.68.7.7 0 0 1-.4.68l-3.72 1.83-1.83 3.73a.7.7 0 0 1-.68.4.7.7 0 0 1-.68-.4L9.48 11.15l-3.72-1.83a.7.7 0 0 1-.4-.68.7.7 0 0 1 .4-.68l3.72-1.83L11.32 2.4A.7.7 0 0 1 12 2Z"/>
+                        </svg>
+                    </div>
+                    <div class="rounded-2xl bg-surface p-3.5 shadow-sm dark:bg-dark-surface">
+                        <div class="flex items-center space-x-1.5 h-5">
+                            <div class="w-2 h-2 bg-on-surface/70 rounded-full animate-pulse [animation-delay:-0.3s] dark:bg-dark-on-surface/70"></div>
+                            <div class="w-2 h-2 bg-on-surface/70 rounded-full animate-pulse [animation-delay:-0.15s] dark:bg-dark-on-surface/70"></div>
+                            <div class="w-2 h-2 bg-on-surface/70 rounded-full animate-pulse dark:bg-dark-on-surface/70"></div>
+                        </div>
+                    </div>
+                `;
+                return wrapper;
+            }
+
+            function scrollToBottom() {
+                chatContainer.parentElement.scrollTop = chatContainer.parentElement.scrollHeight;
+            }
+        });
+    </script></body>
+</html>
